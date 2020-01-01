@@ -48,6 +48,9 @@ euclidlen2[z_] := Total[z^2]
 euclidlenSq[z_] := Total[z^2]
 euclidlenN[z_] := Sqrt[Total[z^2]]//N
 
+
+phi = GoldenRatio//N;
+
 order2permut[s_] := (Flatten[Drop[#,1]& /@ Sort[Table[{s[[i]],i},{i,Length[s]}]]]); (* 1..n *)
 permut2order := order2permut
 
@@ -390,5 +393,75 @@ sobolScrambledInteger2pts2d[npts_,{sobolInd1_,sobolInd2_}]:= {sobolScrambledInte
 
 
 (*------------------------- end of supprot for stdSobol -------------------------*)
+getOwenPtsZeroStorage[npts_,nD_:10] :=
+    Block[ {res,resfname,execstring,returnCode},
+    	resfname = "tmp/ptsOwen8d_"<>pid<>".dat";
+        execstring = execPrefix<>"owen -npts "<>ToString[npts]<>" -nDims "<>ToString[nD]<>" -res_fname "<>resfname <>" >/dev/null";
+        (*Print[execstring]*);
+        returnCode = Run[execstring];
+        If[ returnCode != 0, Print["================ pb in getOwen8dPtsUTK: ",execstring -> returnCode]; Abort[]; ];
+        res = Import[resfname];
+        If[ FileExistsQ[resfname], DeleteFile[resfname] ];
+        res
+    ]
 
+subdivFIBO[symbol_] :=
+    If[ symbol === {},
+        {{0}, {1}},
+        Switch[Last[symbol]
+            ,0, {Join[symbol,{0}],Join[symbol,{1}]}
+            ,1, {Join[symbol,{0}]}
+        ]
+    ]
+FIBOF[symbols_] :=
+    With[ {s = Reverse[symbols]},
+        Total@Table[Fibonacci[i+1 ] s[[i]], {i, Length[s]}]
+    ]
+FIBOphitab = Table[phi^-i, {i, 32}] // N;
+FIBOPhi[s_] := Sum[FIBOphitab[[i]] s[[i]], {i, Length[s]}] 
 
+tst[] :=
+    Module[ {},
+    	{msobol,sobolMX} = buildMSobol[{1,2},False];
+    	
+    	npts1d = 256;
+    	npts = npts1d*npts1d;
+    	mx = Table[0,{npts1d},{npts1d}];
+    	
+        ndigitsBase3 = Ceiling @ Log[3,npts];
+
+    	pts2d = Do[
+    		{x,y} = Floor[npts1d sobol2dOriginal[i]];
+    		u = sobol1D[2,i];
+    		mx[[1+y,1+x]] = u;
+    	, {i,0,npts-1}];
+        {niceRaster[mx,zoom->1],niceRaster[mx,zoom->4]} //Print;
+
+    	pts2d = Do[
+    		{x,y} = Floor[npts1d sobol2dOriginal[i]];
+    		u = vanderCorput[i,3,ndigitsBase3];
+     		mx[[1+y,1+x]] = u;
+    	, {i,0,npts-1}];
+        {niceRaster[mx,zoom->1],niceRaster[mx,zoom->4]} //Print;
+
+        ptsowen2d = getOwenPtsZeroStorage[npts,2];
+    	pts2d = Do[
+    		{x,y} = Floor[npts1d ptsowen2d[[i+1]]];
+    		u = vanderCorput[i,3,ndigitsBase3];
+     		mx[[1+y,1+x]] = u;
+    	, {i,0,npts-1}];
+        {niceRaster[mx,zoom->1],niceRaster[mx,zoom->4]} //Print;
+
+  			  		nlevels = Ceiling @ Log[phi,npts];
+  			  		nptsFibo = Fibonacci[2 + nlevels];
+					symbols = {{}};
+        			Do[symbols = Flatten[#,1]& @ (subdivFIBO /@ symbols),{ilevel,nlevels}];
+        			valsInv = FIBOPhi /@ (Reverse /@ symbols);
+    	pts2d = Do[
+    		{x,y} = Floor[npts1d ptsowen2d[[i+1]]];
+    		u = valsInv[[i+1]];
+     		mx[[1+y,1+x]] = u;
+    	, {i,0,npts-1}];
+        {niceRaster[mx,zoom->1],niceRaster[mx,zoom->4]} //Print;
+
+    ]
